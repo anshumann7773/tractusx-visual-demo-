@@ -1,0 +1,14 @@
+{
+  "note": "Fictional demo data, simplified. Not an official Catena-X aspect model.",
+  "partName": "Front brake disc, ventilated",
+  "manufacturerPartId": "BD-4711",
+  "serialNumber": "SN-2026-000123",
+  "manufacturer": "Bob's Brakes GmbH",
+  "madeIn": "Germany",
+  "productionDate": "2026-09-15",
+  "material": "Grey cast iron",
+  "diameterMm": 330,
+  "weightKg": 8.2,
+  "carbonFootprintKgCO2e": 17.6,
+  "recyclable": true
+}

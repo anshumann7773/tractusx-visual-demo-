@@ -1,0 +1,72 @@
+# Bob + Alice connectors (EDC) + Bob's Tractus-X Digital Twin Registry.
+# Started and stopped by ./run-demo.sh (image "edc-demo" is built by ./setup.sh).
+
+# Both demo folders use the same name, so starting one demo stops the other (they share ports).
+name: tractusx-demo
+
+services:
+
+  # Database for the Digital Twin Registry
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dtr
+      POSTGRES_USER: dtr
+      POSTGRES_PASSWORD: dtr
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtr"]
+      interval: 3s
+      retries: 20
+
+  # Tractus-X Digital Twin Registry ("the phonebook of products"), owned by Bob
+  dtr:
+    # Pinned to the version the official Helm chart uses, so it can't change before the demo
+    image: tractusx/sldt-digital-twin-registry:0.13.0
+    # If Docker complains about the platform on your M2 Mac, uncomment:
+    # platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # "local" profile = no login server (OAuth) needed, for local demos only
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dtr
+      SPRING_DATASOURCE_USERNAME: dtr
+      SPRING_DATASOURCE_PASSWORD: dtr
+      SPRING_DATASOURCE_DRIVERCLASSNAME: org.postgresql.Driver
+      SPRING_SQL_INIT_PLATFORM: pg
+      # Which IDs partners may see and look up (same as the official Helm chart's default)
+      REGISTRY_EXTERNAL_SUBJECT_ID_WILDCARD_ALLOWED_TYPES: "manufacturerPartId,digitalTwinType"
+      JAVA_TOOL_OPTIONS: "-Xmx512m"
+    ports:
+      - "4243:4243"
+
+  # Bob's part data server: answers every request with brake-disc.json.
+  # Only Bob's connector talks to it; Alice can only reach it through the connector.
+  partdata:
+    image: python:3.12-alpine
+    volumes:
+      - ./brake-disc.json:/data/brake-disc.json:ro
+    command:
+      - python
+      - -c
+      - >-
+        import http.server as s;
+        d=open('/data/brake-disc.json','rb').read();
+        H=type('H',(s.BaseHTTPRequestHandler,),{'do_GET':lambda self:(self.send_response(200),self.send_header('Content-Type','application/json'),self.end_headers(),self.wfile.write(d))});
+        s.HTTPServer(('',8080),H).serve_forever()
+
+
+  # Bob (provider) and Alice (consumer) connectors, built from the EDC samples
+  connectors:
+    image: edc-demo
+    depends_on:
+      - dtr
+      - partdata
+    ports:
+      - "19193:19193"   # Bob management API
+      - "19194:19194"   # Bob protocol (DSP)
+      - "19291:19291"   # Bob data plane (public)
+      - "29193:29193"   # Alice management API
+      - "29194:29194"   # Alice protocol (DSP)
+      - "29291:29291"   # Alice data plane (public)
